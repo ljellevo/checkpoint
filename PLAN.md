@@ -51,3 +51,31 @@ o - Second checkpoint (#2, 2026-06-11 13:35)
 And the user should be able to navigate up and down the timeline using the arrow keys, and select a checkpoint to restore by pressing enter.
 
 ## Clarifications
+
+
+
+Now it shows like:
+Last (End)
+|
+> [5f87c1] 2026-06-11 14:38:09  (no message)  after
+|
+o [d2c613] 2026-06-11 14:08:11  (no message)  HEAD
+|
+First (Start)
+
+↑/↓ navigate • enter restore • q quit
+
+If i open and im not at the latest then show the currently active checkpoint:
+Last (End)
+|
+o [5f87c1] 2026-06-11 14:38:09  (no message)  after
+|
+> [d2c613] 2026-06-11 14:08:11  (no message)  HEAD
+|
+First (Start)
+
+↑/↓ navigate • enter restore • q quit
+
+Also lets not then gray out the checkpoints after. But have them in the same color. Rather have the currently selected have text = CURRENT with a highlighted color in pink (instead of HEAD) 
+
+

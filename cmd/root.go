@@ -10,11 +10,19 @@ import (
 )
 
 var message string
+var listFlag bool
 
 var rootCmd = &cobra.Command{
-	Use:   "checkpoint",
-	Short: "Create a checkpoint of your current working tree state",
+	Use: "checkpoint",
+	Short: "Create a checkpoint of your current working tree state. \n" +
+		"This is not a git commit, but a temporary snapshot. \n" +
+		"• Use \"checkpoint -l.\" to see and select between the different checkpoints \n" +
+		"• Use \"checkpoint restore\" to go back to previous checkpoint directly.",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if listFlag {
+			return runList()
+		}
+
 		gitDir, err := checkpoint.GetGitDir()
 		if err != nil {
 			return err
@@ -49,6 +57,27 @@ var rootCmd = &cobra.Command{
 			Untracked: untracked,
 		}
 
+		// If a future checkpoint exists branching from the current HEAD, creating
+		// a new one here will invalidate it. Warn and require confirmation.
+		future, err := checkpoint.FindChild(gitDir, meta.Head)
+		if err != nil {
+			return err
+		}
+		if future != nil {
+			label := future.Message
+			if label == "" {
+				label = "(no message)"
+			}
+			fmt.Printf("Warning: creating this checkpoint will discard [%s] — %s and everything after it.\n", future.ID, label)
+			fmt.Print("Continue? [y/N] ")
+			var answer string
+			fmt.Scanln(&answer)
+			if answer != "y" && answer != "Y" {
+				fmt.Println("Checkpoint cancelled.")
+				return nil
+			}
+		}
+
 		// Prune any checkpoints that are no longer in the chain from the current
 		// head before branching off with a new one.
 		if err := checkpoint.PruneOrphans(gitDir, meta.Head); err != nil {
@@ -79,7 +108,8 @@ func Execute() error {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVarP(&message, "message", "m", "", "Checkpoint message")
+	rootCmd.CompletionOptions.DisableDefaultCmd = true
+	rootCmd.Flags().StringVarP(&message, "message", "m", "", "create checkpoint with message")
+	rootCmd.Flags().BoolVarP(&listFlag, "list", "l", false, "list all checkpoints")
 	rootCmd.AddCommand(restoreCmd)
-	rootCmd.AddCommand(listCmd)
 }
