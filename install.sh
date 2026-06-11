@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-REPO="ludellevold/git-checkpoint"
+REPO="ljellevo/checkpoint"
 BINARY="checkpoint"
 INSTALL_DIR="/usr/local/bin"
 

@@ -20,20 +20,20 @@
 ### macOS / Linux
 
 ```bash
-curl -fsSL https://github.com/ludellevold/git-checkpoint/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/ljellevo/checkpoint/releases/latest/download/install.sh | sh
 ```
 
 Auto-detects your OS and architecture and installs to `/usr/local/bin`.
 
-**Windows** — download the binary directly from the [releases page](https://github.com/ludellevold/git-checkpoint/releases/latest).
+**Windows** — download the binary directly from the [releases page](https://github.com/ljellevo/checkpoint/releases/latest).
 
 ### Build from source
 
 Requires [Go 1.21+](https://go.dev/dl/).
 
 ```bash
-git clone https://github.com/ludellevold/git-checkpoint
-cd git-checkpoint
+git clone https://github.com/ljellevo/checkpoint
+cd checkpoint
 go build -o checkpoint .
 sudo mv checkpoint /usr/local/bin/checkpoint
 ```
@@ -107,7 +107,7 @@ Creating a checkpoint that would invalidate future checkpoints will always promp
 ### Project structure
 
 ```
-git-checkpoint/
+checkpoint/
 ├── main.go
 ├── cmd/
 │   ├── root.go          checkpoint / checkpoint -m / checkpoint --list
