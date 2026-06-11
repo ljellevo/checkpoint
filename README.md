@@ -2,7 +2,7 @@
 
 > Lightweight working-tree snapshots for Git — without commits.
 
-`checkpoint` lets you save and restore the state of your working tree at any point in time. Think of it as a personal undo history that lives alongside your Git repo, completely separate from your commit log.
+`checkpoint` lets you save and restore the state of your working tree at any point in time. Think of it as a personal undo history that lives alongside your Git repo, completely separate from your commit log. The idea is create revertable points while also keeping track of all changed files. Using only git you would need to commit to create a revertable point, but this also removes all changed files from the changed files list.
 
 ---
 
