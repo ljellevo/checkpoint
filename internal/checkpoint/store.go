@@ -1,0 +1,144 @@
+package checkpoint
+
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+func checkpointsDir(gitDir string) string {
+	return filepath.Join(gitDir, "checkpoints")
+}
+
+func ensureDir(gitDir string) error {
+	return os.MkdirAll(checkpointsDir(gitDir), 0755)
+}
+
+func GenerateID() (string, error) {
+	b := make([]byte, 3)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+func LoadMeta(gitDir string) (*Meta, error) {
+	path := filepath.Join(checkpointsDir(gitDir), "meta.json")
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return &Meta{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var m Meta
+	return &m, json.Unmarshal(data, &m)
+}
+
+func SaveMeta(gitDir string, m *Meta) error {
+	if err := ensureDir(gitDir); err != nil {
+		return err
+	}
+	data, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(checkpointsDir(gitDir), "meta.json"), data, 0644)
+}
+
+func LoadCheckpoint(gitDir, id string) (*Checkpoint, error) {
+	path := filepath.Join(checkpointsDir(gitDir), id+".json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var cp Checkpoint
+	return &cp, json.Unmarshal(data, &cp)
+}
+
+func SaveCheckpoint(gitDir string, cp *Checkpoint) error {
+	if err := ensureDir(gitDir); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(cp, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(checkpointsDir(gitDir), cp.ID+".json"), data, 0644)
+}
+
+func DeleteCheckpoint(gitDir, id string) error {
+	return os.Remove(filepath.Join(checkpointsDir(gitDir), id+".json"))
+}
+
+// WalkChain returns checkpoints from HEAD down to the root (newest first).
+func WalkChain(gitDir, headID string) ([]*Checkpoint, error) {
+	if headID == "" {
+		return nil, nil
+	}
+	var chain []*Checkpoint
+	id := headID
+	for id != "" {
+		cp, err := LoadCheckpoint(gitDir, id)
+		if err != nil {
+			return nil, fmt.Errorf("loading checkpoint %s: %w", id, err)
+		}
+		chain = append(chain, cp)
+		id = cp.ParentID
+	}
+	return chain, nil
+}
+
+// ListAll returns all checkpoint files in the checkpoints dir (unordered).
+func ListAll(gitDir string) ([]*Checkpoint, error) {
+	dir := checkpointsDir(gitDir)
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var all []*Checkpoint
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") || e.Name() == "meta.json" {
+			continue
+		}
+		id := strings.TrimSuffix(e.Name(), ".json")
+		cp, err := LoadCheckpoint(gitDir, id)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, cp)
+	}
+	return all, nil
+}
+
+// PruneOrphans deletes any checkpoint not reachable from currentHeadID.
+func PruneOrphans(gitDir, currentHeadID string) error {
+	chain, err := WalkChain(gitDir, currentHeadID)
+	if err != nil {
+		return err
+	}
+	reachable := make(map[string]bool, len(chain))
+	for _, cp := range chain {
+		reachable[cp.ID] = true
+	}
+
+	all, err := ListAll(gitDir)
+	if err != nil {
+		return err
+	}
+	for _, cp := range all {
+		if !reachable[cp.ID] {
+			if err := DeleteCheckpoint(gitDir, cp.ID); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
