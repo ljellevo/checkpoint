@@ -18,6 +18,20 @@ jobs:
         with:
           go-version: stable
 
+      - name: Get next version
+        id: version
+        run: |
+          LATEST=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/latest" \
+            | jq -r '.tag_name // empty')
+          if [ -z "$LATEST" ]; then
+            NEXT=1
+          else
+            CURRENT=$(echo "$LATEST" | sed 's/^v//')
+            NEXT=$((CURRENT + 1))
+          fi
+          echo "version=v$NEXT" >> $GITHUB_OUTPUT
+
       - name: Build binaries
         run: |
           GOOS=darwin  GOARCH=amd64 go build -o checkpoint-darwin-amd64 .
@@ -29,8 +43,8 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ github.run_number }}.0
-          name: v${{ github.run_number }}.0
+          tag_name: ${{ steps.version.outputs.version }}
+          name: ${{ steps.version.outputs.version }}
           files: |
             checkpoint-darwin-amd64
             checkpoint-darwin-arm64
