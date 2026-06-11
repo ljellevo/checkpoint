@@ -31,17 +31,23 @@ var restoreCmd = &cobra.Command{
 			return err
 		}
 
-		// If the working tree doesn't match the HEAD checkpoint, restore TO the
-		// HEAD checkpoint (discard uncommitted changes). Only advance to the
-		// parent when the working tree already matches HEAD.
 		matches, err := checkpoint.CurrentMatchesCheckpoint(head)
 		if err != nil {
 			return err
 		}
 
 		var target *checkpoint.Checkpoint
+
 		if !matches {
-			// Dirty — restore to HEAD checkpoint, discarding uncommitted changes.
+			// Dirty — prompt, then restore to HEAD checkpoint.
+			ok, err := confirmIfDirty(head)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				fmt.Println("Restore cancelled.")
+				return nil
+			}
 			target = head
 		} else {
 			// Clean at HEAD — go one step back to the parent.
@@ -54,19 +60,10 @@ var restoreCmd = &cobra.Command{
 			}
 		}
 
-		if err := checkpoint.ResetTracked(); err != nil {
-			return fmt.Errorf("resetting tracked files: %w", err)
-		}
-
-		if err := checkpoint.RestoreUntracked(head.Untracked, target.Untracked); err != nil {
+		if err := applyRestore(gitDir, head, target); err != nil {
 			return err
 		}
 
-		if err := checkpoint.ApplyPatch(target.Patch); err != nil {
-			return fmt.Errorf("applying patch: %w", err)
-		}
-
-		// Only update HEAD when we actually moved to a different checkpoint.
 		if target.ID != head.ID {
 			meta.Head = target.ID
 			if err := checkpoint.SaveMeta(gitDir, meta); err != nil {

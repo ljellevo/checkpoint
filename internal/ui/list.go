@@ -21,19 +21,25 @@ var (
 				Foreground(lipgloss.Color("0")).
 				Padding(0, 1).
 				Render("HEAD")
+	futureBadge = lipgloss.NewStyle().
+			Background(lipgloss.Color("238")).
+			Foreground(lipgloss.Color("250")).
+			Padding(0, 1).
+			Render("future")
 )
 
 type item struct {
-	cp      *checkpoint.Checkpoint
-	isHead  bool
+	cp       *checkpoint.Checkpoint
+	isHead   bool
+	isFuture bool
 }
 
 func (i item) FilterValue() string { return i.cp.Message + i.cp.ID }
 
 type itemDelegate struct{}
 
-func (d itemDelegate) Height() int                             { return 1 }
-func (d itemDelegate) Spacing() int                            { return 0 }
+func (d itemDelegate) Height() int                              { return 1 }
+func (d itemDelegate) Spacing() int                             { return 0 }
 func (d itemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
 func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
 	i, ok := listItem.(item)
@@ -49,11 +55,18 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 	idPart := fmt.Sprintf("[%s]", i.cp.ID)
 
 	var badge string
-	if i.isHead {
+	switch {
+	case i.isHead:
 		badge = " " + headBadge
+	case i.isFuture:
+		badge = " " + futureBadge
 	}
 
 	line := fmt.Sprintf("%s %s  %s%s", idPart, ts, msg, badge)
+
+	if i.isFuture {
+		line = dimStyle.Render(line)
+	}
 
 	if index == m.Index() {
 		fmt.Fprint(w, selectedItemStyle.Render("> "+line))
@@ -63,7 +76,8 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 }
 
 type model struct {
-	list list.Model
+	list     list.Model
+	selected *checkpoint.Checkpoint
 }
 
 func (m model) Init() tea.Cmd { return nil }
@@ -74,6 +88,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "esc", "ctrl+c":
 			return m, tea.Quit
+		case "enter":
+			if i, ok := m.list.SelectedItem().(item); ok {
+				m.selected = i.cp
+				return m, tea.Quit
+			}
 		}
 	case tea.WindowSizeMsg:
 		m.list.SetWidth(msg.Width)
@@ -88,29 +107,46 @@ func (m model) View() string {
 	return "\n" + m.list.View()
 }
 
-func RunList(checkpoints []*checkpoint.Checkpoint) error {
+// RunList shows the interactive checkpoint list and returns the selected
+// checkpoint, or nil if the user quit without selecting.
+func RunList(checkpoints []*checkpoint.Checkpoint, headID string) (*checkpoint.Checkpoint, error) {
 	if len(checkpoints) == 0 {
 		fmt.Println("No checkpoints yet. Run 'checkpoint' to create one.")
-		return nil
+		return nil, nil
 	}
 
+	// Determine which checkpoints are "future" (ahead of current HEAD).
+	headSeen := false
 	items := make([]list.Item, len(checkpoints))
 	for i, cp := range checkpoints {
-		items[i] = item{cp: cp, isHead: i == 0}
+		isHead := cp.ID == headID
+		if isHead {
+			headSeen = true
+		}
+		items[i] = item{
+			cp:       cp,
+			isHead:   isHead,
+			isFuture: !headSeen,
+		}
 	}
 
 	const defaultWidth = 80
 	const defaultHeight = 20
 
 	l := list.New(items, itemDelegate{}, defaultWidth, defaultHeight)
-	l.Title = "Checkpoints"
+	l.Title = "Checkpoints  (↑/↓ navigate • enter restore • q quit)"
 	l.Styles.Title = titleStyle
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
-
 	l.SetShowHelp(false)
 
 	p := tea.NewProgram(model{list: l})
-	_, err := p.Run()
-	return err
+	result, err := p.Run()
+	if err != nil {
+		return nil, err
+	}
+	if m, ok := result.(model); ok {
+		return m.selected, nil
+	}
+	return nil, nil
 }

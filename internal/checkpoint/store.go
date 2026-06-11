@@ -118,6 +118,51 @@ func ListAll(gitDir string) ([]*Checkpoint, error) {
 	return all, nil
 }
 
+// FindChild returns the checkpoint whose ParentID is parentID, or nil if none.
+func FindChild(gitDir, parentID string) (*Checkpoint, error) {
+	all, err := ListAll(gitDir)
+	if err != nil {
+		return nil, err
+	}
+	for _, cp := range all {
+		if cp.ParentID == parentID {
+			return cp, nil
+		}
+	}
+	return nil, nil
+}
+
+// BuildFullChain returns the complete timeline (newest first), including future
+// checkpoints that are still accessible beyond the current HEAD.
+func BuildFullChain(gitDir, headID string) ([]*Checkpoint, error) {
+	past, err := WalkChain(gitDir, headID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Walk forward from HEAD to find any still-accessible future checkpoints.
+	var future []*Checkpoint
+	curID := headID
+	for {
+		child, err := FindChild(gitDir, curID)
+		if err != nil {
+			return nil, err
+		}
+		if child == nil {
+			break
+		}
+		future = append(future, child)
+		curID = child.ID
+	}
+
+	// Reverse future so the most recent is first.
+	for i, j := 0, len(future)-1; i < j; i, j = i+1, j-1 {
+		future[i], future[j] = future[j], future[i]
+	}
+
+	return append(future, past...), nil
+}
+
 // PruneOrphans deletes any checkpoint not reachable from currentHeadID.
 func PruneOrphans(gitDir, currentHeadID string) error {
 	chain, err := WalkChain(gitDir, currentHeadID)
