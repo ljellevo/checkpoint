@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Build binaries
+        run: |
+          GOOS=darwin  GOARCH=amd64 go build -o checkpoint-darwin-amd64 .
+          GOOS=darwin  GOARCH=arm64 go build -o checkpoint-darwin-arm64 .
+          GOOS=linux   GOARCH=amd64 go build -o checkpoint-linux-amd64 .
+          GOOS=linux   GOARCH=arm64 go build -o checkpoint-linux-arm64 .
+          GOOS=windows GOARCH=amd64 go build -o checkpoint-windows-amd64.exe .
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}.0
+          name: v${{ github.run_number }}.0
+          files: |
+            checkpoint-darwin-amd64
+            checkpoint-darwin-arm64
+            checkpoint-linux-amd64
+            checkpoint-linux-arm64
+            checkpoint-windows-amd64.exe
+            install.sh

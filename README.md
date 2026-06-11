@@ -1,12 +1,46 @@
 # checkpoint
 
-A fast, lightweight CLI tool for creating and restoring working-tree snapshots in any Git repository — without committing.
+> Lightweight working-tree snapshots for Git — without commits.
 
-Checkpoints capture all tracked file changes and untracked files at a point in time, stored as diffs inside `.git/checkpoints/`. You can freely restore, branch off, and experiment without touching your Git history.
+`checkpoint` lets you save and restore the state of your working tree at any point in time. Think of it as a personal undo history that lives alongside your Git repo, completely separate from your commit log.
 
 ---
 
-## Usage
+## ✨ Features
+
+- **Instant snapshots** — capture all tracked changes and untracked files in milliseconds
+- **Non-destructive** — stored in `.git/checkpoints/`, never touches your commits or branches
+- **Timeline navigation** — browse your checkpoint history in an interactive TUI and jump to any point
+- **Smart invalidation** — creating a new checkpoint after restoring warns you before discarding future checkpoints
+
+---
+
+## 📦 Installation
+
+### macOS / Linux
+
+```bash
+curl -fsSL https://github.com/ludellevold/git-checkpoint/releases/latest/download/install.sh | sh
+```
+
+Auto-detects your OS and architecture and installs to `/usr/local/bin`.
+
+**Windows** — download the binary directly from the [releases page](https://github.com/ludellevold/git-checkpoint/releases/latest).
+
+### Build from source
+
+Requires [Go 1.21+](https://go.dev/dl/).
+
+```bash
+git clone https://github.com/ludellevold/git-checkpoint
+cd git-checkpoint
+go build -o checkpoint .
+sudo mv checkpoint /usr/local/bin/checkpoint
+```
+
+---
+
+## 🚀 Usage
 
 ### Create a checkpoint
 
@@ -15,105 +49,93 @@ checkpoint
 checkpoint -m "before refactoring auth"
 ```
 
-Creates a snapshot of the current working tree (modified tracked files + untracked files). Prints a confirmation with the checkpoint ID and timestamp.
+Saves a snapshot of the current working tree. Prints a confirmation with the checkpoint ID and timestamp.
 
-### Restore the previous checkpoint
+### Restore to the previous checkpoint
 
 ```bash
 checkpoint restore
 ```
 
-Reverts the working tree to the state of the previous checkpoint. If your working tree has changes that weren't saved in the last checkpoint, you'll be asked to confirm before they are discarded.
+Reverts the working tree one step back. If you have unsaved changes, you'll be prompted to confirm before they are discarded.
 
-### List all checkpoints
+### Browse and restore from history
 
 ```bash
-checkpoint -l / --list
+checkpoint -l
+checkpoint --list
 ```
 
-Opens an interactive TUI list (built with [Bubbletea](https://github.com/charmbracelet/bubbletea)) showing all checkpoints in the current timeline, newest first. The current checkpoint is marked `CURRENT`.
+Opens an interactive TUI showing your full checkpoint timeline:
+
+```
+  Most recent
+  |
+> [a1b2c3] 2026-06-11 14:38:09  before refactoring auth  CURRENT
+  |
+o [d4e5f6] 2026-06-11 13:57:22  initial state
+  |
+  Oldest
+```
 
 | Key | Action |
 |-----|--------|
 | `↑` / `↓` | Navigate |
+| `Enter` | Restore to selected checkpoint |
 | `q` / `Esc` | Quit |
 
 ---
 
-## Timeline behaviour
+## 🔀 Timeline behaviour
 
-Checkpoints form a linear timeline. If you restore to an earlier checkpoint and then create a new one, the "future" checkpoints (the ones you skipped past) are automatically discarded — just like in a version-controlled timeline.
-
-**Example:**
+Checkpoints form a linear timeline. Restoring to an older checkpoint keeps newer ones accessible — as long as you don't create a new checkpoint from that point.
 
 ```
-checkpoint -m "A"   →  timeline: A
-checkpoint -m "B"   →  timeline: A → B
-checkpoint restore  →  back to A
-checkpoint -m "C"   →  timeline: A → C   (B is gone)
+checkpoint -m "A"        →  A
+checkpoint -m "B"        →  A → B
+checkpoint restore       →  back to A  (B still accessible via --list)
+checkpoint restore       →  back to A's state  (discards uncommitted changes)
+checkpoint -m "C"        →  A → C  (B is discarded, with confirmation)
 ```
 
-You can restore as many times as you like without creating a new checkpoint — the timeline only changes when you *create* a new checkpoint.
+Creating a checkpoint that would invalidate future checkpoints will always prompt for confirmation first.
 
 ---
 
-## Installation
-
-### Build from source
-
-Requires [Go 1.21+](https://go.dev/dl/).
-
-```bash
-git clone <repo>
-cd git-checkpoint
-go build -o checkpoint .
-```
-
-Then move the binary somewhere on your `$PATH`:
-
-```bash
-mv checkpoint /usr/local/bin/checkpoint
-```
-
-### Run directly
-
-```bash
-go run . -m "my checkpoint"
-go run . restore
-go run . list
-```
-
----
-
-## Developer guide
+## 🛠 Developer guide
 
 ### Project structure
 
 ```
 git-checkpoint/
-├── main.go                    Entry point
+├── main.go
 ├── cmd/
-│   ├── root.go                `checkpoint [-m msg]` command
-│   ├── restore.go             `checkpoint restore` command
-│   └── list.go                `checkpoint list` command
+│   ├── root.go          checkpoint / checkpoint -m / checkpoint --list
+│   ├── restore.go       checkpoint restore
+│   ├── list.go          list logic
+│   └── shared.go        shared restore helpers
 ├── internal/
 │   ├── checkpoint/
-│   │   ├── types.go           Checkpoint and Meta data structures
-│   │   ├── store.go           Read/write checkpoints in .git/checkpoints/
-│   │   └── git.go             Git operations (diff, apply, reset, untracked)
+│   │   ├── types.go     Checkpoint and Meta structs
+│   │   ├── store.go     Read/write/prune .git/checkpoints/
+│   │   └── git.go       Git operations (diff, apply, reset)
 │   └── ui/
-│       └── list.go            Bubbletea TUI for the list command
-└── README.md
+│       └── list.go      Bubbletea TUI
+└── .github/
+    └── workflows/
+        └── release.yml  Cross-platform release workflow
 ```
 
 ### Storage format
 
 Checkpoints are stored in `.git/checkpoints/`:
 
-- `meta.json` — `{ "head": "<current-checkpoint-id>" }`
-- `<id>.json` — one file per checkpoint containing the patch, untracked file contents, message, timestamp, and parent ID
+| File | Contents |
+|------|----------|
+| `meta.json` | `{ "head": "<id>" }` — pointer to the current checkpoint |
+| `<id>.json` | Patch, untracked file contents, message, timestamp, parent ID |
 
-The checkpoints form a singly-linked list via `parent_id`. Only checkpoints reachable from `head` are part of the active timeline.
+Checkpoints form a singly-linked list via `parent_id`. Future checkpoints (accessible after a restore) are discovered by scanning for a child whose `parent_id` matches the current HEAD.
 
 ### Dependencies
 
@@ -124,14 +146,24 @@ The checkpoints form a singly-linked list via `parent_id`. Only checkpoints reac
 | `github.com/charmbracelet/bubbles` | List component |
 | `github.com/charmbracelet/lipgloss` | Terminal styling |
 
-### Running tests
+### Build & run
 
 ```bash
-go test ./...
+go build -o checkpoint .
+go run . -m "my checkpoint"
+go run . restore
+go run . --list
 ```
 
-### Linting
+### Lint & test
 
 ```bash
 go vet ./...
+go test ./...
 ```
+
+---
+
+## 📄 License
+
+MIT
