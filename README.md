@@ -28,10 +28,10 @@ Reverts the working tree to the state of the previous checkpoint. If your workin
 ### List all checkpoints
 
 ```bash
-checkpoint list
+checkpoint -l / --list
 ```
 
-Opens an interactive TUI list (built with [Bubbletea](https://github.com/charmbracelet/bubbletea)) showing all checkpoints in the current timeline, newest first. The current checkpoint is marked `HEAD`.
+Opens an interactive TUI list (built with [Bubbletea](https://github.com/charmbracelet/bubbletea)) showing all checkpoints in the current timeline, newest first. The current checkpoint is marked `CURRENT`.
 
 | Key | Action |
 |-----|--------|
