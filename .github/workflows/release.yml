@@ -2,6 +2,10 @@ name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version number (e.g. 1.0.0). Don't include the 'v' prefix, it will be added automatically."
+        required: true
 
 permissions:
   contents: write
@@ -16,20 +20,6 @@ jobs:
         with:
           go-version: stable
 
-      - name: Get next version
-        id: version
-        run: |
-          LATEST=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/latest" \
-            | jq -r '.tag_name // empty')
-          if [ -z "$LATEST" ]; then
-            NEXT=1
-          else
-            CURRENT=$(echo "$LATEST" | sed 's/^v//')
-            NEXT=$((CURRENT + 1))
-          fi
-          echo "version=v$NEXT" >> $GITHUB_OUTPUT
-
       - name: Build binaries
         run: |
           GOOS=darwin  GOARCH=amd64 go build -o checkpoint-darwin-amd64 .
@@ -41,8 +31,8 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.version }}
-          name: ${{ steps.version.outputs.version }}
+          tag_name: v${{ github.event.inputs.version }}
+          name: v${{ github.event.inputs.version }}
           files: |
             checkpoint-darwin-amd64
             checkpoint-darwin-arm64
