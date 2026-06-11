@@ -40,5 +40,5 @@ else
   sudo mv "/tmp/$BINARY" "$INSTALL_DIR/$BINARY"
 fi
 
-echo "Installed: $(which $BINARY)"
-$BINARY --help
+echo "Installed $BINARY at $(which $BINARY)"
+echo "$BINARY should now be available in your PATH, and ready to run"
