@@ -1,4 +1,4 @@
-# checkpoint
+![checkpoint logo](resources/logo.png)
 
 > Lightweight working-tree snapshots for Git — without commits.
 
